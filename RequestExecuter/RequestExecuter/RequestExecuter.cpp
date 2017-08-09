@@ -10,7 +10,7 @@
 
 #pragma comment(lib, "Ws2_32.lib")
 
-#define BUFSIZE_SOCKET 500
+#define BUFSIZE_SOCKET 200
 
 using namespace std;
 
@@ -24,7 +24,7 @@ bool standardNames = false;
 HANDLE hConsole;
 
 int main(int argc, char *argv[]) {
-	long long bytesToProcess, bytesProcessed;
+	long long bytesToProcess;
 	string allRequests, request, sHelper, responseHeader, filename;
 	size_t offset, nextOffset, requestOffset;
 	WSADATA wsadata;
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
 		offset = requestOffset;
 		SetConsoleTextAttribute(hConsole, 14);
 		cout << "Executing request:\n\n";
-		SetConsoleTextAttribute(hConsole, 7);
+		SetConsoleTextAttribute(hConsole, 11);
 		cout << request.c_str();
 		SetConsoleTextAttribute(hConsole, 14);
 		cout << "\n...\n\n";
@@ -114,9 +114,8 @@ int executeRequest(string& request) {
 	sockaddr_in *server;
 	SOCKET s;
 	ofstream file;
-	char buffer[BUFSIZE_SOCKET], ipAddress[16], infoText[200];
+	char buffer[BUFSIZE_SOCKET], ipAddress[16];
 	time_t start, timeVal;
-	int i;
 
 	//find hostname in request and nslookup IP
 	offset = request.find("Host:");
@@ -166,21 +165,21 @@ int executeRequest(string& request) {
 		std::cout << stringToSend;
 		bytesProcessed = 0;
 		while (bytesToProcess > 0) {
-			bytesProcessed = send(s, stringToSend + bytesProcessed, bytesToProcess, 0);
+			bytesProcessed = send(s, stringToSend + (int)bytesProcessed, (int)bytesToProcess, 0);
 			bytesToProcess -= bytesProcessed;
 		}
 		offset = nextOffset + 1;
 	}
 
 	SetConsoleTextAttribute(hConsole, 14);
-	std::cout << "Receiving header..." << endl << endl;
+	std::cout << endl << "Receiving header..." << endl << endl;
 	SetConsoleTextAttribute(hConsole, 7);
 
 	totalSize = 4;
 	recv(s, buffer, 4, 0);
 	buffer[4] = 0;
 	responseHeader.assign(buffer);
-	while (!(responseHeader.at(totalSize - 3) == '\n' && responseHeader.at(totalSize - 2) == '\r' && responseHeader.at(totalSize - 1) == '\n')) {
+	while (!(responseHeader.at((int)totalSize - 3) == '\n' && responseHeader.at((int)totalSize - 2) == '\r' && responseHeader.at((int)totalSize - 1) == '\n')) {
 		recv(s, buffer, 1, 0);
 		responseHeader += buffer[0];
 		totalSize++;
@@ -245,17 +244,18 @@ int executeRequest(string& request) {
 			bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
 			file.write(buffer, bytesProcessed);
 			totalBytesProcessed += bytesProcessed;
-			//print some info every 500KB
-			if (totalBytesProcessed % 500000 < bytesProcessed) {
+			//print some info every 200KB
+			if (totalBytesProcessed % 200000 < bytesProcessed) {
 				timeVal = time(0) - start;
 				SetConsoleTextAttribute(hConsole, 10);
-				printf("\r%7.2f kb/s.", (float)totalBytesProcessed / 1000 / timeVal);
-				timeVal = (double)timeVal / totalBytesProcessed * bytesToProcess;
+				printf("\r%.2f kb/s.\t", (float)totalBytesProcessed / 1000 / timeVal);
+				timeVal = (time_t)((double)timeVal / totalBytesProcessed * bytesToProcess);
 				SetConsoleTextAttribute(hConsole, 13);
-				printf( "%6.1f of %6.1f MB (%d%%); ",
+				printf( "%.1f of %.1f MB (%lld%%);\t",
 					(float)totalBytesProcessed / 1000000, (float)totalSize / 1000000, totalBytesProcessed * 100 / totalSize);
 				cout.precision(1);
-				cout << fixed << timeVal << " seconds (" << (float)timeVal / 60 << " minutes) left.";
+				SetConsoleTextAttribute(hConsole, 11);
+				cout << fixed << timeVal << " seconds (" << (float)timeVal / 60 << " minutes) left.     ";
 			}
 			bytesToProcess -= bytesProcessed;
 		}
@@ -271,10 +271,10 @@ int executeRequest(string& request) {
 			file.write(buffer, bytesProcessed);
 			bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
 			totalBytesProcessed += bytesProcessed;
-			//print some info every 500KB
-			if (totalBytesProcessed % 500000 < bytesProcessed) {
+			//print some info every 200KB
+			if (totalBytesProcessed % 200000 < bytesProcessed) {
 				timeVal = time(0) - start;
-				printf(infoText, 200, "%.2f kb/s\r", (float)totalBytesProcessed / 1000 / timeVal);
+				printf("\r%.2f kb/s     ", (float)totalBytesProcessed / 1000 / timeVal);
 			}
 		}
 	}
@@ -282,7 +282,7 @@ int executeRequest(string& request) {
 	file.close();
 	closesocket(s);
 	SetConsoleTextAttribute(hConsole, 10);
-	std::cout << "Done.\n\n" << endl;
+	std::cout << "\nDone.\n" << endl;
 	SetConsoleTextAttribute(hConsole, 7);
 	return 0;
 }
