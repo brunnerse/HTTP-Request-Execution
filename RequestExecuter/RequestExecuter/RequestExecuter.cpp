@@ -7,10 +7,11 @@
 #include <time.h>
 #include <fstream>
 #include <Windows.h>
+#include <thread>
 
 #pragma comment(lib, "Ws2_32.lib")
 
-#define BUFSIZE_SOCKET 200
+#define BUFSIZE_SOCKET 10000
 
 using namespace std;
 
@@ -18,6 +19,8 @@ bool file_exists(const char *filename);
 int executeRequest(string& request);
 streampos getFileSize(const char *filename);
 void print_error(const char* error);
+void writeToFile(ofstream* file, const char *buffer, long long size);
+void doNothing();
 
 bool standardNames = false;
 
@@ -114,7 +117,8 @@ int executeRequest(string& request) {
 	sockaddr_in *server;
 	SOCKET s;
 	ofstream file;
-	char buffer[BUFSIZE_SOCKET], ipAddress[16];
+	char buffer1[BUFSIZE_SOCKET], buffer2[BUFSIZE_SOCKET], ipAddress[16];
+	char *curBuffer = buffer1;
 	time_t start, timeVal;
 
 	//find hostname in request and nslookup IP
@@ -176,12 +180,12 @@ int executeRequest(string& request) {
 	SetConsoleTextAttribute(hConsole, 7);
 
 	totalSize = 4;
-	recv(s, buffer, 4, 0);
-	buffer[4] = 0;
-	responseHeader.assign(buffer);
+	recv(s, buffer1, 4, 0);
+	buffer1[4] = 0;
+	responseHeader.assign(buffer1);
 	while (!(responseHeader.at((int)totalSize - 3) == '\n' && responseHeader.at((int)totalSize - 2) == '\r' && responseHeader.at((int)totalSize - 1) == '\n')) {
-		recv(s, buffer, 1, 0);
-		responseHeader += buffer[0];
+		recv(s, buffer1, 1, 0);
+		responseHeader += buffer1[0];
 		totalSize++;
 	}
 	std::cout << responseHeader.c_str() << endl;
@@ -223,8 +227,8 @@ int executeRequest(string& request) {
 		do {
 			sHelper.assign(filename.substr(0, offset));
 			sHelper.append(" - ");
-			_itoa_s(counter, buffer, BUFSIZE_SOCKET, 10);
-			sHelper.append(buffer);
+			_itoa_s(counter, buffer1, BUFSIZE_SOCKET, 10);
+			sHelper.append(buffer1);
 			sHelper.append(filename.substr(offset));
 			counter++;
 		} while (file_exists(sHelper.c_str()));
@@ -233,6 +237,11 @@ int executeRequest(string& request) {
 
 	file.open(filename, ios::out | ios::binary | ios::trunc);
 
+	//Receive and write into File
+	//System works like this: two buffers, receive in one buffer. Then let thread write the buffer into file and receive
+	//in the other buffer. Then swap.
+	curBuffer = buffer1;
+	thread tWrite(doNothing);
 	if (totalSize >= 0) {
 		SetConsoleTextAttribute(hConsole, 14);
 		std::cout << "Receiving " << totalSize << " bytes into file " << filename.c_str() << " ..." << endl << endl;
@@ -241,8 +250,15 @@ int executeRequest(string& request) {
 		bytesToProcess = totalSize;
 		start = time(0);
 		while (bytesToProcess > 0) {
-			bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
-			file.write(buffer, bytesProcessed);
+			bytesProcessed = recv(s, curBuffer, BUFSIZE_SOCKET, 0);
+			tWrite.join();
+			//thread writes current buffer into File
+			tWrite = thread(writeToFile, &file, curBuffer, bytesProcessed);
+			//swap Buffers
+			if (curBuffer == buffer1)
+				curBuffer = buffer2;
+			else
+				curBuffer = buffer1;
 			totalBytesProcessed += bytesProcessed;
 			//print some info every 200KB
 			if (totalBytesProcessed % 200000 < bytesProcessed) {
@@ -264,12 +280,18 @@ int executeRequest(string& request) {
 		SetConsoleTextAttribute(hConsole, 14);
 		std::cout << "Receiving into file" << filename.c_str() << " ..." << endl << endl;
 		SetConsoleTextAttribute(hConsole, 13);
-		bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
+		bytesProcessed = recv(s, curBuffer, BUFSIZE_SOCKET, 0);
 		totalBytesProcessed = bytesProcessed;
 		start = time(0);
 		while (bytesProcessed > 0) {
-			file.write(buffer, bytesProcessed);
-			bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
+			tWrite.join();
+			tWrite = thread(writeToFile, &file, curBuffer, bytesProcessed);
+			//swap buffers
+			if (curBuffer == buffer1)
+				curBuffer = buffer2;
+			else
+				curBuffer = buffer1;
+			bytesProcessed = recv(s, curBuffer, BUFSIZE_SOCKET, 0);
 			totalBytesProcessed += bytesProcessed;
 			//print some info every 200KB
 			if (totalBytesProcessed % 200000 < bytesProcessed) {
@@ -278,6 +300,7 @@ int executeRequest(string& request) {
 			}
 		}
 	}
+	tWrite.join();
 
 	file.close();
 	closesocket(s);
@@ -285,6 +308,10 @@ int executeRequest(string& request) {
 	std::cout << "\nDone.\n" << endl;
 	SetConsoleTextAttribute(hConsole, 7);
 	return 0;
+}
+
+void writeToFile(ofstream *file, const char* buffer, long long length) {
+	file->write(buffer, length);
 }
 
 streampos getFileSize(const char* filename) {
@@ -306,4 +333,8 @@ void print_error(const char* error) {
 	SetConsoleTextAttribute(hConsole, 12);
 	cerr << error << endl;
 	SetConsoleTextAttribute(hConsole, 7);
+}
+
+void doNothing() {
+
 }
