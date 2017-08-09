@@ -1,0 +1,8 @@
+﻿  stdafx.cpp
+  RequestExecuter.cpp
+c:\users\severin\_tools\request executer\requestexecuter\requestexecuter\requestexecuter.cpp(101): warning C4244: 'argument': conversion from '__int64' to 'int', possible loss of data
+c:\users\severin\_tools\request executer\requestexecuter\requestexecuter\requestexecuter.cpp(113): warning C4244: 'argument': conversion from '__int64' to 'const unsigned int', possible loss of data
+c:\users\severin\_tools\request executer\requestexecuter\requestexecuter\requestexecuter.cpp(182): warning C4244: '=': conversion from 'double' to 'time_t', possible loss of data
+  Generating Code...
+  RequestExecuter.vcxproj -> C:\Users\Severin\_Tools\Request Executer\RequestExecuter\Debug\RequestExecuter.exe
+  RequestExecuter.vcxproj -> C:\Users\Severin\_Tools\Request Executer\RequestExecuter\Debug\RequestExecuter.pdb (Partial PDB)

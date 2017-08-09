@@ -1,0 +1,7 @@
+GET /powr/defaults/image-slider1.jpg HTTP/1.1
+Host: s3-us-west-1.amazonaws.com
+User-Agent: Mozilla/5.0
+Referer: http://www.vidshort.net/teencurves-kelsi-monroe-boat-day.html
+Range: bytes=0-
+Accept-Encoding: identity;q=1, *,q=0
+Connection: close
