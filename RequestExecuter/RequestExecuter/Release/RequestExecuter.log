@@ -1,10 +1,15 @@
 ﻿  RequestExecuter.cpp
-RequestExecuter.cpp(101): warning C4244: 'argument': conversion from '__int64' to 'int', possible loss of data
-RequestExecuter.cpp(113): warning C4244: 'argument': conversion from '__int64' to 'const unsigned int', possible loss of data
-RequestExecuter.cpp(182): warning C4244: '=': conversion from 'double' to 'time_t', possible loss of data
+RequestExecuter.cpp(27): warning C4101: 'bytesProcessed': unreferenced local variable
+RequestExecuter.cpp(165): warning C4244: 'argument': conversion from '__int64' to 'int', possible loss of data
+RequestExecuter.cpp(179): warning C4244: 'argument': conversion from '__int64' to 'const unsigned int', possible loss of data
+RequestExecuter.cpp(249): warning C4244: '=': conversion from 'double' to 'time_t', possible loss of data
+RequestExecuter.cpp(251): warning C4477: 'printf' : format string '%d' requires an argument of type 'int', but variadic argument 3 has type '__int64'
+  RequestExecuter.cpp(251): note: consider using '%lld' in the format string
+  RequestExecuter.cpp(251): note: consider using '%I64d' in the format string
+RequestExecuter.cpp(115): warning C4101: 'i': unreferenced local variable
   Generating code
-  1 of 201 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    17 functions had inline decision re-evaluated but remain unchanged
+  3 of 217 functions ( 1.4%) were compiled, the rest were copied from previous compilation.
+    1 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
-  RequestExecuter.vcxproj -> C:\Users\Severin\_Tools\Request Executer\RequestExecuter\Release\RequestExecuter.exe
+  RequestExecuter.vcxproj -> C:\Users\Severin\_Tools\Request Executer\HTTP-Request-Execution\RequestExecuter\Release\RequestExecuter.exe

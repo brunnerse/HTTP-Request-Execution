@@ -6,29 +6,30 @@
 #include <WS2tcpip.h>
 #include <time.h>
 #include <fstream>
+#include <Windows.h>
 
 #pragma comment(lib, "Ws2_32.lib")
 
-#define BUFSIZE 500
+#define BUFSIZE_SOCKET 500
 
 using namespace std;
 
 bool file_exists(const char *filename);
+int executeRequest(string& request);
+streampos getFileSize(const char *filename);
+void print_error(const char* error);
+
+bool standardNames = false;
+
+HANDLE hConsole;
 
 int main(int argc, char *argv[]) {
-	bool standardNames = false;
-	long long bytesToProcess, bytesProcessed, totalBytesProcessed, totalSize;
-	string request, sHelper, responseHeader, filename;
-	fstream file;
-	sockaddr_in *server;
-	char buffer[BUFSIZE], ipAddress[16];
-	const char *stringToSend;
-	const char *servername;
-	size_t offset, nextOffset;
-	addrinfo *serverInfo;
-	SOCKET s;
-	time_t start, timeVal;
+	long long bytesToProcess, bytesProcessed;
+	string allRequests, request, sHelper, responseHeader, filename;
+	size_t offset, nextOffset, requestOffset;
 	WSADATA wsadata;
+	ifstream file;
+	char buffer[1];
 
 	if (argc > 1) {
 		if (argc == 2 && strcmp(argv[1], "-general") == 0) {
@@ -40,6 +41,9 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	//Get Console Output Handler
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
 	//Start Winsock2
 	if (WSAStartup(MAKEWORD(2, 2), &wsadata) == -1) {
 		cerr << "Not able to start Winsock 2!" << endl;
@@ -49,23 +53,84 @@ int main(int argc, char *argv[]) {
 	//read request from file request.txt
 	file.open("request.txt", ios::in);
 	if (!file.good()) {
-		cerr << "File request.txt not found!" << endl;
+		print_error("File request.txt not found!");
 		return 1;
 	}
+	bytesToProcess = getFileSize("request.txt");
 	file.read(buffer, 1);
 	while (!file.eof()) {
-		request += buffer[0];
+		allRequests += (buffer[0]);
 		file.read(buffer, 1);
 	}
 	file.close();
 
+	//offset marks the start of the request, requestOffset the end of it.
+	offset = 0;
+	while (offset < MAXSIZE_T) {
+		
+		
+		requestOffset = MAXSIZE_T;
+		for (const char *method : { "GET", "POST", "HEAD", "PUT", "DELETE", "CONNECT", "OPTIONS", "PATCH" }) {
+			if ((nextOffset = allRequests.find(method, offset + 10)) != string::npos && nextOffset < requestOffset)
+				requestOffset = nextOffset;
+		}
+
+		if (requestOffset == MAXSIZE_T)
+			request = allRequests.substr(offset);
+		else
+			request = allRequests.substr(offset, requestOffset - offset);
+		while (request.at(request.length() - 2) == '\n')
+			request.erase(request.length() - 2, 1);
+		
+		offset = requestOffset;
+		SetConsoleTextAttribute(hConsole, 14);
+		cout << "Executing request:\n\n";
+		SetConsoleTextAttribute(hConsole, 7);
+		cout << request.c_str();
+		SetConsoleTextAttribute(hConsole, 14);
+		cout << "\n...\n\n";
+		SetConsoleTextAttribute(hConsole, 7);
+		if (executeRequest(request) != 0) {
+			return 1;
+		}
+
+		
+	}
+
+	WSACleanup();
+	SetConsoleTextAttribute(hConsole, 10);
+	cout << "Finished all requests." << endl;
+	SetConsoleTextAttribute(hConsole, 10);
+	return 0;
+}
+
+//returns 0 when suceeded
+int executeRequest(string& request) {
+	size_t offset, nextOffset;
+	long long bytesProcessed, bytesToProcess, totalSize, totalBytesProcessed;
+	string sHelper, responseHeader, filename;
+	const char* servername, *stringToSend;
+	addrinfo *serverInfo;
+	sockaddr_in *server;
+	SOCKET s;
+	ofstream file;
+	char buffer[BUFSIZE_SOCKET], ipAddress[16], infoText[200];
+	time_t start, timeVal;
+	int i;
+
 	//find hostname in request and nslookup IP
 	offset = request.find("Host:");
+	if (offset == string::npos) {
+		print_error("Request invalid!");
+		return -1;
+	}
 	sHelper = request.substr(offset + 6, request.find("\n", offset) - offset - 6);
 	servername = sHelper.c_str();
 
 	if (getaddrinfo(servername, "80", NULL, &serverInfo) != 0) {
+		SetConsoleTextAttribute(hConsole, 12);
 		cerr << "Server " << servername << "not found!" << endl;
+		SetConsoleTextAttribute(hConsole, 7);
 		return 1;
 	}
 
@@ -74,17 +139,20 @@ int main(int argc, char *argv[]) {
 
 	s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (s == INVALID_SOCKET) {
-		std::cout << "Error creating socket." << endl;
+		print_error("Error while creating socket.");
 		return 1;
 	}
 
-	std::cout << "Connecting to Server " << servername << " (" << inet_ntop(AF_INET, &server->sin_addr, ipAddress, 16) << ", Port " << ntohs(server->sin_port) << ")..." << endl;
+	std::cout << "Connecting to Server " << servername << " (" << inet_ntop(AF_INET, &server->sin_addr, ipAddress, 16) << ", Port " << ntohs(server->sin_port) << ")..." << endl << endl;
 	if (connect(s, (sockaddr*)server, sizeof(sockaddr_in)) != 0) {
-		cerr << "Connection to Server failed." << endl;
+		print_error("Connection to Server failed.");
 		return 1;
 	}
 
-	std::cout << "Sending request..." << endl;
+	SetConsoleTextAttribute(hConsole, 14);
+	std::cout << "Sending request..." << endl << endl;
+	SetConsoleTextAttribute(hConsole, 7);
+
 	if (request.at(request.size() - 1) != '\n')
 		request.append("\n\n");
 	else
@@ -95,7 +163,7 @@ int main(int argc, char *argv[]) {
 		sHelper.append("\r\n");
 		stringToSend = sHelper.c_str();
 		bytesToProcess = strlen(stringToSend);
-		std::cout << "\t" << stringToSend;
+		std::cout << stringToSend;
 		bytesProcessed = 0;
 		while (bytesToProcess > 0) {
 			bytesProcessed = send(s, stringToSend + bytesProcessed, bytesToProcess, 0);
@@ -104,7 +172,9 @@ int main(int argc, char *argv[]) {
 		offset = nextOffset + 1;
 	}
 
+	SetConsoleTextAttribute(hConsole, 14);
 	std::cout << "Receiving header..." << endl << endl;
+	SetConsoleTextAttribute(hConsole, 7);
 
 	totalSize = 4;
 	recv(s, buffer, 4, 0);
@@ -154,7 +224,7 @@ int main(int argc, char *argv[]) {
 		do {
 			sHelper.assign(filename.substr(0, offset));
 			sHelper.append(" - ");
-			_itoa_s(counter, buffer, BUFSIZE, 10);
+			_itoa_s(counter, buffer, BUFSIZE_SOCKET, 10);
 			sHelper.append(buffer);
 			sHelper.append(filename.substr(offset));
 			counter++;
@@ -165,57 +235,75 @@ int main(int argc, char *argv[]) {
 	file.open(filename, ios::out | ios::binary | ios::trunc);
 
 	if (totalSize >= 0) {
-		std::cout << "Receiving " << totalSize << " bytes into file " << filename.c_str() << "..." << endl;
+		SetConsoleTextAttribute(hConsole, 14);
+		std::cout << "Receiving " << totalSize << " bytes into file " << filename.c_str() << " ..." << endl << endl;
+		SetConsoleTextAttribute(hConsole, 13);
 		totalBytesProcessed = 0;
 		bytesToProcess = totalSize;
 		start = time(0);
 		while (bytesToProcess > 0) {
-			bytesProcessed = recv(s, buffer, BUFSIZE, 0);
+			bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
 			file.write(buffer, bytesProcessed);
 			totalBytesProcessed += bytesProcessed;
-			//print some info every 10MB
-			if (totalBytesProcessed % 10000000 < bytesProcessed) {
+			//print some info every 500KB
+			if (totalBytesProcessed % 500000 < bytesProcessed) {
 				timeVal = time(0) - start;
-				std::cout << fixed;
-				std::cout.precision(2);
-				std::cout << "\tCurrent Download Speed " << (float)totalBytesProcessed / 1000 / timeVal << " kb/s." << endl;
+				SetConsoleTextAttribute(hConsole, 10);
+				printf("\r%7.2f kb/s.", (float)totalBytesProcessed / 1000 / timeVal);
 				timeVal = (double)timeVal / totalBytesProcessed * bytesToProcess;
-				std::cout << "Downloaded " << (float)totalBytesProcessed / 1000000 << " of " << (float)totalSize / 1000000 << " Megabytes (" << totalBytesProcessed * 100 / totalSize <<
-					" %) ; estimated time until finish: " << timeVal << " seconds or " << (float)timeVal / 60 << " minutes." << endl;
+				SetConsoleTextAttribute(hConsole, 13);
+				printf( "%6.1f of %6.1f MB (%d%%); ",
+					(float)totalBytesProcessed / 1000000, (float)totalSize / 1000000, totalBytesProcessed * 100 / totalSize);
+				cout.precision(1);
+				cout << fixed << timeVal << " seconds (" << (float)timeVal / 60 << " minutes) left.";
 			}
 			bytesToProcess -= bytesProcessed;
 		}
 	}
 	else {
-		std::cout << "Receiving into file" << filename.c_str() << "..." << endl;
-		bytesProcessed = recv(s, buffer, BUFSIZE, 0);
+		SetConsoleTextAttribute(hConsole, 14);
+		std::cout << "Receiving into file" << filename.c_str() << " ..." << endl << endl;
+		SetConsoleTextAttribute(hConsole, 13);
+		bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
 		totalBytesProcessed = bytesProcessed;
 		start = time(0);
 		while (bytesProcessed > 0) {
 			file.write(buffer, bytesProcessed);
-			bytesProcessed = recv(s, buffer, BUFSIZE, 0);
+			bytesProcessed = recv(s, buffer, BUFSIZE_SOCKET, 0);
 			totalBytesProcessed += bytesProcessed;
-			//print some info every 10MB
-			if (totalBytesProcessed % 10000000 < bytesProcessed) {
+			//print some info every 500KB
+			if (totalBytesProcessed % 500000 < bytesProcessed) {
 				timeVal = time(0) - start;
-				std::cout << fixed;
-				std::cout.precision(2);
-				std::cout << "\tCurrent Download Speed " << (float)totalBytesProcessed / 1000 / timeVal << " kb/s." << endl;
+				printf(infoText, 200, "%.2f kb/s\r", (float)totalBytesProcessed / 1000 / timeVal);
 			}
 		}
 	}
 
 	file.close();
 	closesocket(s);
-	std::cout << "Done." << endl;
-
-	WSACleanup();
-
+	SetConsoleTextAttribute(hConsole, 10);
+	std::cout << "Done.\n\n" << endl;
+	SetConsoleTextAttribute(hConsole, 7);
 	return 0;
 }
 
+streampos getFileSize(const char* filename) {
+	ifstream file(filename);
+	file.seekg(0, ios::end);
+	streampos s = file.tellg();
+	file.close();
+	return s;
+}
 
 bool file_exists(const char *filename) {
 	ifstream file(filename);
-	return file.good();
+	bool exists = file.good();
+	file.close();
+	return exists;
+}
+
+void print_error(const char* error) {
+	SetConsoleTextAttribute(hConsole, 12);
+	cerr << error << endl;
+	SetConsoleTextAttribute(hConsole, 7);
 }
